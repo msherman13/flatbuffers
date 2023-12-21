@@ -640,6 +640,13 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
         CalculateOffset<typename OffsetT<String>::offset_type>());
   }
 
+  template<template<typename> class OffsetT = Offset>
+  OffsetT<String> CreateStringUnsafe(const char *str, size_t len) {
+    CreateStringImplUnsafe(str, len);
+    return OffsetT<String>(
+        CalculateOffset<typename OffsetT<String>::offset_type>());
+  }
+
   /// @brief Store a string in the buffer, which is null-terminated.
   /// @param[in] str A const char pointer to a C-string to add to the buffer.
   /// @return Returns the offset in the buffer where the string starts.
@@ -769,10 +776,10 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
 
   /// @cond FLATBUFFERS_INTERNAL
   template<typename LenT = uoffset_t, typename ReturnT = uoffset_t>
-  ReturnT EndVector(size_t len) {
+  ReturnT EndVectorUnsafe(size_t len) {
     FLATBUFFERS_ASSERT(nested);  // Hit if no corresponding StartVector.
     nested = false;
-    return PushElement<LenT, ReturnT>(static_cast<LenT>(len));
+    return PushElementUnsafe<LenT, ReturnT>(static_cast<LenT>(len));
   }
 
   template<template<typename> class OffsetT = Offset, typename LenT = uint32_t>
@@ -846,6 +853,34 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
       // clang-format on
     }
     return OffsetT<VectorT<T>>(EndVector<LenT, offset_type>(len));
+  }
+
+  template<typename T, template<typename...> class OffsetT = Offset,
+           template<typename...> class VectorT = Vector>
+  OffsetT<VectorT<T>> CreateVectorUnsafe(const T *v, size_t len) {
+    // The type of the length field in the vector.
+    typedef typename VectorT<T>::size_type LenT;
+    typedef typename OffsetT<VectorT<T>>::offset_type offset_type;
+    // If this assert hits, you're specifying a template argument that is
+    // causing the wrong overload to be selected, remove it.
+    AssertScalarT<T>();
+    StartVector<T, OffsetT, LenT>(len);
+    if (len > 0) {
+      // clang-format off
+      #if FLATBUFFERS_LITTLEENDIAN
+        PushBytesUnsafe(reinterpret_cast<const uint8_t *>(v), len * sizeof(T));
+      #else
+        if (sizeof(T) == 1) {
+          PushBytesUnsafe(reinterpret_cast<const uint8_t *>(v), len);
+        } else {
+          for (auto i = len; i > 0; ) {
+            PushElementUnsafe(v[--i]);
+          }
+        }
+      #endif
+      // clang-format on
+    }
+    return OffsetT<VectorT<T>>(EndVectorUnsafe<LenT, offset_type>(len));
   }
 
   /// @brief Serialize an array like object into a FlatBuffer `vector`.
@@ -1496,6 +1531,14 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     buf_.fill(1);
     PushBytes(reinterpret_cast<const uint8_t *>(str), len);
     PushElement(static_cast<uoffset_t>(len));
+  }
+
+  void CreateStringImplUnsafe(const char *str, size_t len) {
+    NotNested();
+    PreAlign<uoffset_t>(len + 1);  // Always 0-terminated.
+    buf_.fill_unsafe(1);
+    PushBytesUnsafe(reinterpret_cast<const uint8_t *>(str), len);
+    PushElementUnsafe(static_cast<uoffset_t>(len));
   }
 
   // Allocates space for a vector of structures.
