@@ -318,6 +318,14 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     return CalculateOffset<ReturnT>();
   }
 
+  template<typename T, typename ReturnT = uoffset_t>
+  ReturnT PushElementUnsafe(T element) {
+    AssertScalarT<T>();
+    Align(sizeof(T));
+    buf_.push_small_unsafe(EndianScalar(element));
+    return CalculateOffset<ReturnT>();
+  }
+
   template<typename T, template<typename> class OffsetT = Offset>
   uoffset_t PushElement(OffsetT<T> off) {
     // Special case for offsets: see ReferTo below.
@@ -333,6 +341,13 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     if (field > max_voffset_) { max_voffset_ = field; }
   }
 
+  void TrackFieldUnsafe(voffset_t field, uoffset_t off) {
+    FieldLoc fl = { off, field };
+    buf_.scratch_push_small_unsafe(fl);
+    num_field_loc++;
+    if (field > max_voffset_) { max_voffset_ = field; }
+  }
+
   // Like PushElement, but additionally tracks the field this represents.
   template<typename T> void AddElement(voffset_t field, T e, T def) {
     // We don't serialize values equal to the default.
@@ -342,6 +357,10 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
 
   template<typename T> void AddElement(voffset_t field, T e) {
     TrackField(field, PushElement(e));
+  }
+
+  template<typename T> void AddElementUnsafe(voffset_t field, T e) {
+    TrackField(field, PushElementUnsafe(e));
   }
 
   template<typename T> void AddOffset(voffset_t field, Offset<T> off) {
@@ -358,6 +377,12 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     if (!structptr) return;  // Default, don't store.
     Align(AlignOf<T>());
     buf_.push_small(*structptr);
+    TrackField(field, CalculateOffset<uoffset_t>());
+  }
+
+  template<typename T> void AddStructUnsafe(voffset_t field, const T& s) {
+    Align(AlignOf<T>());
+    buf_.push_small_unsafe(s);
     TrackField(field, CalculateOffset<uoffset_t>());
   }
 
@@ -474,6 +499,74 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     // If this is a new vtable, remember it.
     if (vt_use == GetSizeRelative32BitRegion()) {
       buf_.scratch_push_small(vt_use);
+    }
+    // Fill the vtable offset we created above.
+    // The offset points from the beginning of the object to where the vtable is
+    // stored.
+    // Offsets default direction is downward in memory for future format
+    // flexibility (storing all vtables at the start of the file).
+    WriteScalar(buf_.data_at(vtable_offset_loc + length_of_64_bit_region_),
+                static_cast<soffset_t>(vt_use) -
+                    static_cast<soffset_t>(vtable_offset_loc));
+    nested = false;
+    return vtable_offset_loc;
+  }
+
+  uoffset_t EndTableUnsafe(uoffset_t start) {
+    // If you get this assert, a corresponding StartTable wasn't called.
+    FLATBUFFERS_ASSERT(nested);
+    // Write the vtable offset, which is the start of any Table.
+    // We fill its value later.
+    // This is relative to the end of the 32-bit region.
+    const uoffset_t vtable_offset_loc =
+        static_cast<uoffset_t>(PushElement<soffset_t>(0));
+    // Write a vtable, which consists entirely of voffset_t elements.
+    // It starts with the number of offsets, followed by a type id, followed
+    // by the offsets themselves. In reverse:
+    // Include space for the last offset and ensure empty tables have a
+    // minimum size.
+    max_voffset_ =
+        (std::max)(static_cast<voffset_t>(max_voffset_ + sizeof(voffset_t)),
+                   FieldIndexToOffset(0));
+    buf_.fill_big_unsafe(max_voffset_);
+    const uoffset_t table_object_size = vtable_offset_loc - start;
+    // Vtable use 16bit offsets.
+    FLATBUFFERS_ASSERT(table_object_size < 0x10000);
+    WriteScalar<voffset_t>(buf_.data() + sizeof(voffset_t),
+                           static_cast<voffset_t>(table_object_size));
+    WriteScalar<voffset_t>(buf_.data(), max_voffset_);
+    // Write the offsets into the table
+    for (auto it = buf_.scratch_end() - num_field_loc * sizeof(FieldLoc);
+         it < buf_.scratch_end(); it += sizeof(FieldLoc)) {
+      auto field_location = reinterpret_cast<FieldLoc *>(it);
+      const voffset_t pos =
+          static_cast<voffset_t>(vtable_offset_loc - field_location->off);
+      // If this asserts, it means you've set a field twice.
+      FLATBUFFERS_ASSERT(
+          !ReadScalar<voffset_t>(buf_.data() + field_location->id));
+      WriteScalar<voffset_t>(buf_.data() + field_location->id, pos);
+    }
+    ClearOffsets();
+    auto vt1 = reinterpret_cast<voffset_t *>(buf_.data());
+    auto vt1_size = ReadScalar<voffset_t>(vt1);
+    auto vt_use = GetSizeRelative32BitRegion();
+    // See if we already have generated a vtable with this exact same
+    // layout before. If so, make it point to the old one, remove this one.
+    if (dedup_vtables_) {
+      for (auto it = buf_.scratch_data(); it < buf_.scratch_end();
+           it += sizeof(uoffset_t)) {
+        auto vt_offset_ptr = reinterpret_cast<uoffset_t *>(it);
+        auto vt2 = reinterpret_cast<voffset_t *>(buf_.data_at(*vt_offset_ptr));
+        auto vt2_size = ReadScalar<voffset_t>(vt2);
+        if (vt1_size != vt2_size || 0 != memcmp(vt2, vt1, vt1_size)) continue;
+        vt_use = *vt_offset_ptr;
+        buf_.pop(GetSizeRelative32BitRegion() - vtable_offset_loc);
+        break;
+      }
+    }
+    // If this is a new vtable, remember it.
+    if (vt_use == GetSizeRelative32BitRegion()) {
+      buf_.scratch_push_small_unsafe(vt_use);
     }
     // Fill the vtable offset we created above.
     // The offset points from the beginning of the object to where the vtable is

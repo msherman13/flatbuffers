@@ -2907,6 +2907,7 @@ class CppGenerator : public BaseGenerator {
     }
 
     GenBuilders(struct_def);
+    GenBuildersUnsafe(struct_def);
 
     if (opts_.generate_object_based_api) {
       // Generate a pre-declaration for a CreateX method that works with an
@@ -3152,6 +3153,120 @@ class CppGenerator : public BaseGenerator {
       code_ += "}";
       code_ += "";
     }
+  }
+
+  void GenBuildersUnsafe(const StructDef &struct_def) {
+    code_.SetValue("STRUCT_NAME", Name(struct_def));
+
+    // Generate a builder struct:
+    code_ += "struct {{STRUCT_NAME}}BuilderUnsafe {";
+    code_ += "  typedef {{STRUCT_NAME}} Table;";
+    code_ += "  " + GetBuilder() + " &fbb_;";
+    code_ += "  ::flatbuffers::uoffset_t start_;";
+
+    bool has_string_or_vector_fields = false;
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      const auto &field = **it;
+      if (field.deprecated) continue;
+      const bool is_scalar = IsScalar(field.value.type.base_type);
+      const bool is_default_scalar = is_scalar && !field.IsScalarOptional();
+      const bool is_string = IsString(field.value.type);
+      const bool is_vector = IsVector(field.value.type);
+      if (is_string || is_vector) { has_string_or_vector_fields = true; }
+
+      std::string offset = GenFieldOffsetName(field);
+      std::string name = GenUnderlyingCast(field, false, Name(field));
+      std::string value = is_default_scalar ? GenDefaultConstant(field) : "";
+
+      // Generate accessor functions of the form:
+      // void add_name(type name) {
+      //   fbb_.AddElement<type>(offset, name, default);
+      // }
+      code_.SetValue("FIELD_NAME", Name(field));
+      code_.SetValue("FIELD_TYPE",
+                     GenTypeWire(field.value.type, " ", true, field.offset64));
+      code_.SetValue("ADD_OFFSET", Name(struct_def) + "::" + offset);
+      code_.SetValue("ADD_NAME", name);
+      code_.SetValue("ADD_VALUE", value);
+      if (is_scalar) {
+        const auto type =
+            GenTypeWire(field.value.type, "", false, field.offset64);
+        code_.SetValue("ADD_FN", "AddElementUnsafe<" + type + ">");
+      } else if (IsStruct(field.value.type)) {
+        code_.SetValue("ADD_FN", "AddStructUnsafe");
+      } else {
+        code_.SetValue("ADD_FN", "AddOffsetUnsafe");
+      }
+
+      code_ += "  void add_{{FIELD_NAME}}({{FIELD_TYPE}}{{FIELD_NAME}}) {";
+      code_ += "    fbb_.{{ADD_FN}}(\\";
+      if (is_default_scalar) {
+        code_ += "{{ADD_OFFSET}}, {{ADD_NAME}}, {{ADD_VALUE}});";
+      } else {
+        code_ += "{{ADD_OFFSET}}, {{ADD_NAME}});";
+      }
+      code_ += "  }";
+    }
+
+    // Builder constructor
+    code_ += "  explicit {{STRUCT_NAME}}Builder(" + GetBuilder() +
+             " "
+             "&_fbb)";
+    code_ += "        : fbb_(_fbb) {";
+    code_ += "    start_ = fbb_.StartTable();";
+    code_ += "  }";
+
+    // Finish() function.
+    code_ += "  ::flatbuffers::Offset<{{STRUCT_NAME}}> Finish() {";
+    code_ += "    const auto end = fbb_.EndTableUnsafe(start_);";
+    code_ += "    auto o = ::flatbuffers::Offset<{{STRUCT_NAME}}>(end);";
+
+    for (const auto &field : struct_def.fields.vec) {
+      if (!field->deprecated && field->IsRequired()) {
+        code_.SetValue("FIELD_NAME", Name(*field));
+        code_.SetValue("OFFSET_NAME", GenFieldOffsetName(*field));
+        code_ += "    fbb_.Required(o, {{STRUCT_NAME}}::{{OFFSET_NAME}});";
+      }
+    }
+    code_ += "    return o;";
+    code_ += "  }";
+    code_ += "};";
+    code_ += "";
+
+    // Generate a convenient CreateXUnsafe function that uses the above builder
+    // to create a table in one go.
+    code_ +=
+        "inline ::flatbuffers::Offset<{{STRUCT_NAME}}> "
+        "Create{{STRUCT_NAME}}(";
+    code_ += "    " + GetBuilder() + " &_fbb\\";
+    for (const auto &field : struct_def.fields.vec) {
+      if (!field->deprecated) { GenParam(*field, false, ",\n    "); }
+    }
+    code_ += ") {";
+
+    code_ += "  {{STRUCT_NAME}}BuilderUnsafe builder_(_fbb);";
+    for (size_t size = struct_def.sortbysize ? sizeof(largest_scalar_t) : 1;
+         size; size /= 2) {
+      for (auto it = struct_def.fields.vec.rbegin();
+           it != struct_def.fields.vec.rend(); ++it) {
+        const auto &field = **it;
+        if (!field.deprecated && (!struct_def.sortbysize ||
+                                  size == SizeOf(field.value.type.base_type))) {
+          code_.SetValue("FIELD_NAME", Name(field));
+          if (field.IsScalarOptional()) {
+            code_ +=
+                "  if({{FIELD_NAME}}) { "
+                "builder_.add_{{FIELD_NAME}}(*{{FIELD_NAME}}); }";
+          } else {
+            code_ += "  builder_.add_{{FIELD_NAME}}({{FIELD_NAME}});";
+          }
+        }
+      }
+    }
+    code_ += "  return builder_.FinishUnsafe();";
+    code_ += "}";
+    code_ += "";
   }
 
   std::string GenUnionUnpackVal(const FieldDef &afield,

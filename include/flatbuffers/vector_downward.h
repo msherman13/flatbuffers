@@ -46,7 +46,9 @@ template<typename SizeT = uoffset_t> class vector_downward {
         size_(0),
         buf_(nullptr),
         cur_(nullptr),
-        scratch_(nullptr) {}
+        scratch_(nullptr) {
+    reallocate(initial_size_);
+  }
 
   vector_downward(vector_downward &&other) noexcept
       // clang-format on
@@ -156,6 +158,12 @@ template<typename SizeT = uoffset_t> class vector_downward {
     return cur_;
   }
 
+  inline uint8_t *make_space_unsafe(size_t len) {
+    cur_ -= len;
+    size_ += static_cast<SizeT>(len);
+    return cur_;
+  }
+
   // Returns nullptr if using the DefaultAllocator.
   Allocator *get_custom_allocator() { return allocator_; }
 
@@ -202,8 +210,18 @@ template<typename SizeT = uoffset_t> class vector_downward {
     *reinterpret_cast<T *>(cur_) = little_endian_t;
   }
 
+  template<typename T> void push_small_unsafe(const T &little_endian_t) {
+    make_space_unsafe(sizeof(T));
+    *reinterpret_cast<T *>(cur_) = little_endian_t;
+  }
+
   template<typename T> void scratch_push_small(const T &t) {
     ensure_space(sizeof(T));
+    *reinterpret_cast<T *>(scratch_) = t;
+    scratch_ += sizeof(T);
+  }
+
+  template<typename T> void scratch_push_small_unsafe(const T &t) {
     *reinterpret_cast<T *>(scratch_) = t;
     scratch_ += sizeof(T);
   }
@@ -219,6 +237,10 @@ template<typename SizeT = uoffset_t> class vector_downward {
   // Precondition: zero_pad_bytes > 0
   void fill_big(size_t zero_pad_bytes) {
     memset(make_space(zero_pad_bytes), 0, zero_pad_bytes);
+  }
+
+  void fill_big_unsafe(size_t zero_pad_bytes) {
+    memset(make_space_unsafe(zero_pad_bytes), 0, zero_pad_bytes);
   }
 
   void pop(size_t bytes_to_remove) {
