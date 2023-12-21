@@ -1315,6 +1315,11 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     Finish(root.o, file_identifier, false);
   }
 
+  template<typename T>
+  void FinishUnsafe(Offset<T> root, const char *file_identifier = nullptr) {
+    FinishUnsafe(root.o, file_identifier, false);
+  }
+
   /// @brief Finish a buffer with a 32 bit size field pre-fixed (size of the
   /// buffer following the size field). These buffers are NOT compatible
   /// with standard buffers created by Finish, i.e. you can't call GetRoot
