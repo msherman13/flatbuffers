@@ -1063,6 +1063,21 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     return OffsetT<VectorT<const T *>>(EndVector<LenT, offset_type>(len));
   }
 
+  template<typename T, template<typename...> class OffsetT = Offset,
+           template<typename...> class VectorT = Vector>
+  OffsetT<VectorT<const T *>> CreateVectorOfStructsUnsafe(const T *v, size_t len) {
+    // The type of the length field in the vector.
+    typedef typename VectorT<T>::size_type LenT;
+    typedef typename OffsetT<VectorT<const T *>>::offset_type offset_type;
+
+    StartVector<OffsetT, LenT>(len * sizeof(T) / AlignOf<T>(), sizeof(T),
+                               AlignOf<T>());
+    if (len > 0) {
+      PushBytesUnsafe(reinterpret_cast<const uint8_t *>(v), sizeof(T) * len);
+    }
+    return OffsetT<VectorT<const T *>>(EndVectorUnsafe<LenT, offset_type>(len));
+  }
+
   /// @brief Serialize an array of structs into a FlatBuffer `vector`.
   /// @tparam T The data type of the struct array elements.
   /// @param[in] filler A function that takes the current iteration
