@@ -827,19 +827,6 @@ class CppGenerator : public BaseGenerator {
     }
   }
 
-  std::string GenTypeWireUnsafe(const Type &type, const char *postfix,
-                                bool user_facing_type,
-                                bool _64_bit_offset = false) const {
-    if (IsScalar(type.base_type)) {
-      return GenTypeBasic(type, user_facing_type) + postfix;
-    } else if (IsStruct(type)) {
-      return "const " + GenTypePointer(type) + " &";
-    } else {
-      return "::flatbuffers::Offset" + std::string(_64_bit_offset ? "64" : "") +
-             "<" + GenTypePointer(type) + ">" + postfix;
-    }
-  }
-
   // Return a C++ type for any type (scalar/pointer) that reflects its
   // serialized size.
   std::string GenTypeSize(const Type &type) const {
@@ -3198,7 +3185,7 @@ class CppGenerator : public BaseGenerator {
       // }
       code_.SetValue("FIELD_NAME", Name(field));
       code_.SetValue("FIELD_TYPE",
-                     GenTypeWireUnsafe(field.value.type, " ", true, field.offset64));
+                     GenTypeWire(field.value.type, " ", true, field.offset64));
       code_.SetValue("ADD_OFFSET", Name(struct_def) + "::" + offset);
       code_.SetValue("ADD_NAME", name);
       code_.SetValue("ADD_VALUE", value);
