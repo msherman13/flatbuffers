@@ -237,6 +237,11 @@ template<typename SizeT = uoffset_t> class vector_downward {
     for (size_t i = 0; i < zero_pad_bytes; i++) cur_[i] = 0;
   }
 
+  void fill_unsafe(size_t zero_pad_bytes) {
+    make_space_unsafe(zero_pad_bytes);
+    for (size_t i = 0; i < zero_pad_bytes; i++) cur_[i] = 0;
+  }
+
   // Version for when we know the size is larger.
   // Precondition: zero_pad_bytes > 0
   void fill_big(size_t zero_pad_bytes) {
