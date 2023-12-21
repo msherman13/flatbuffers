@@ -3201,7 +3201,7 @@ class CppGenerator : public BaseGenerator {
 
       code_ += "  void add_{{FIELD_NAME}}({{FIELD_TYPE}}{{FIELD_NAME}}) {";
       code_ += "    fbb_.{{ADD_FN}}(\\";
-      code_ += "{{ADD_OFFSET}}, *{{ADD_NAME}});";
+      code_ += "{{ADD_OFFSET}}, {{ADD_NAME}});";
       code_ += "  }";
     }
 

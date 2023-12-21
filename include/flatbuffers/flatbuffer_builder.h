@@ -384,9 +384,9 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     TrackField(field, CalculateOffset<uoffset_t>());
   }
 
-  template<typename T> void AddStructUnsafe(voffset_t field, const T& s) {
+  template<typename T> void AddStructUnsafe(voffset_t field, const T* structptr) {
     Align(AlignOf<T>());
-    buf_.push_small_unsafe(s);
+    buf_.push_small_unsafe(*structptr);
     TrackField(field, CalculateOffset<uoffset_t>());
   }
 
