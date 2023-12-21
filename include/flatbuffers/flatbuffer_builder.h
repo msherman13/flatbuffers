@@ -928,6 +928,13 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     return Offset<Vector<Offset<T>>>(EndVector(len));
   }
 
+  template<typename T>
+  Offset<Vector<Offset<T>>> CreateVectorUnsafe(const Offset<T> *v, size_t len) {
+    StartVector<Offset<T>>(len);
+    for (auto i = len; i > 0;) { PushElementUnsafe(v[--i]); }
+    return Offset<Vector<Offset<T>>>(EndVectorUnsafe(len));
+  }
+
   /// @brief Serialize a `std::vector` into a FlatBuffer `vector`.
   /// @tparam T The data type of the `std::vector` elements.
   /// @param v A const reference to the `std::vector` to serialize into the
