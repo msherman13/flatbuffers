@@ -204,6 +204,10 @@ template<typename SizeT = uoffset_t> class vector_downward {
     if (num > 0) { memcpy(make_space(num), bytes, num); }
   }
 
+  void push_unsafe(const uint8_t *bytes, size_t num) {
+    memcpy(make_space_unsafe(num), bytes, num);
+  }
+
   // Specialized version of push() that avoids memcpy call for small data.
   template<typename T> void push_small(const T &little_endian_t) {
     make_space(sizeof(T));

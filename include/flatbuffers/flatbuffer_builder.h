@@ -301,6 +301,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   }
 
   void PushBytes(const uint8_t *bytes, size_t size) { buf_.push(bytes, size); }
+  void PushBytesUnsafe(const uint8_t *bytes, size_t size) { buf_.push_unsafe(bytes, size); }
 
   void PopBytes(size_t amount) { buf_.pop(amount); }
 
@@ -1360,6 +1361,30 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
                 kFileIdentifierLength);
     }
     PushElement(ReferTo(root));  // Location of root.
+    if (size_prefix) { PushElement(GetSize()); }
+    finished = true;
+  }
+
+  void FinishUnsafe(uoffset_t root, const char *file_identifier, bool size_prefix) {
+    NotNested();
+    buf_.clear_scratch();
+
+    const size_t prefix_size = size_prefix ? sizeof(SizeT) : 0;
+    // Make sure we track the alignment of the size prefix.
+    TrackMinAlign(prefix_size);
+
+    const size_t root_offset_size = sizeof(uoffset_t);
+    const size_t file_id_size = file_identifier ? kFileIdentifierLength : 0;
+
+    // This will cause the whole buffer to be aligned.
+    PreAlign(prefix_size + root_offset_size + file_id_size, minalign_);
+
+    if (file_identifier) {
+      FLATBUFFERS_ASSERT(strlen(file_identifier) == kFileIdentifierLength);
+      PushBytesUnsafe(reinterpret_cast<const uint8_t *>(file_identifier),
+                kFileIdentifierLength);
+    }
+    PushElementUnsafe(ReferTo(root));  // Location of root.
     if (size_prefix) { PushElement(GetSize()); }
     finished = true;
   }
