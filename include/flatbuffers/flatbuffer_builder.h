@@ -671,6 +671,11 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     return CreateString<OffsetT>(str.c_str(), str.length());
   }
 
+  template<template<typename> class OffsetT = Offset>
+  OffsetT<String> CreateStringUnsafe(const std::string &str) {
+    return CreateStringUnsafe<OffsetT>(str.c_str(), str.length());
+  }
+
   // clang-format off
   #ifdef FLATBUFFERS_HAS_STRING_VIEW
   /// @brief Store a string in the buffer, which can contain any binary data.
@@ -679,6 +684,11 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   template<template <typename> class OffsetT = Offset>
   OffsetT<String>CreateString(flatbuffers::string_view str) {
     return CreateString<OffsetT>(str.data(), str.size());
+  }
+
+  template<template <typename> class OffsetT = Offset>
+  OffsetT<String>CreateStringUnsafe(flatbuffers::string_view str) {
+    return CreateStringUnsafe<OffsetT>(str.data(), str.size());
   }
   #endif // FLATBUFFERS_HAS_STRING_VIEW
   // clang-format on
