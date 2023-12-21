@@ -368,6 +368,10 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     AddElement(field, ReferTo(off.o), static_cast<uoffset_t>(0));
   }
 
+  template<typename T> void AddOffsetUnsafe(voffset_t field, Offset<T> off) {
+    AddElementUnsafe(field, ReferTo(off.o));
+  }
+
   template<typename T> void AddOffset(voffset_t field, Offset64<T> off) {
     if (off.IsNull()) return;  // Don't store.
     AddElement(field, ReferTo(off.o), static_cast<uoffset64_t>(0));

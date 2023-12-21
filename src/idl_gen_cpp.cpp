@@ -3210,7 +3210,7 @@ class CppGenerator : public BaseGenerator {
     }
 
     // Builder constructor
-    code_ += "  explicit {{STRUCT_NAME}}Builder(" + GetBuilder() +
+    code_ += "  explicit {{STRUCT_NAME}}BuilderUnsafe(" + GetBuilder() +
              " "
              "&_fbb)";
     code_ += "        : fbb_(_fbb) {";
@@ -3232,40 +3232,6 @@ class CppGenerator : public BaseGenerator {
     code_ += "    return o;";
     code_ += "  }";
     code_ += "};";
-    code_ += "";
-
-    // Generate a convenient CreateXUnsafe function that uses the above builder
-    // to create a table in one go.
-    code_ +=
-        "inline ::flatbuffers::Offset<{{STRUCT_NAME}}> "
-        "Create{{STRUCT_NAME}}(";
-    code_ += "    " + GetBuilder() + " &_fbb\\";
-    for (const auto &field : struct_def.fields.vec) {
-      if (!field->deprecated) { GenParam(*field, false, ",\n    "); }
-    }
-    code_ += ") {";
-
-    code_ += "  {{STRUCT_NAME}}BuilderUnsafe builder_(_fbb);";
-    for (size_t size = struct_def.sortbysize ? sizeof(largest_scalar_t) : 1;
-         size; size /= 2) {
-      for (auto it = struct_def.fields.vec.rbegin();
-           it != struct_def.fields.vec.rend(); ++it) {
-        const auto &field = **it;
-        if (!field.deprecated && (!struct_def.sortbysize ||
-                                  size == SizeOf(field.value.type.base_type))) {
-          code_.SetValue("FIELD_NAME", Name(field));
-          if (field.IsScalarOptional()) {
-            code_ +=
-                "  if({{FIELD_NAME}}) { "
-                "builder_.add_{{FIELD_NAME}}(*{{FIELD_NAME}}); }";
-          } else {
-            code_ += "  builder_.add_{{FIELD_NAME}}({{FIELD_NAME}});";
-          }
-        }
-      }
-    }
-    code_ += "  return builder_.FinishUnsafe();";
-    code_ += "}";
     code_ += "";
   }
 
