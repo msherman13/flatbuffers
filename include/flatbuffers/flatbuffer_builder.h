@@ -333,6 +333,12 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     return PushElement(ReferTo(off.o));
   }
 
+  template<typename T, template<typename> class OffsetT = Offset>
+  uoffset_t PushElementUnsafe(OffsetT<T> off) {
+    // Special case for offsets: see ReferTo below.
+    return PushElementUnsafe(ReferTo(off.o));
+  }
+
   // When writing fields, we track where they are, so we can create correct
   // vtables later.
   void TrackField(voffset_t field, uoffset_t off) {
