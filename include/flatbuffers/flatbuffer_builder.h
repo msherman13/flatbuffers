@@ -1328,6 +1328,12 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     Finish(root.o, file_identifier, true);
   }
 
+  template<typename T>
+  void FinishSizePrefixedUnsafe(Offset<T> root,
+                          const char *file_identifier = nullptr) {
+    FinishUnsafe(root.o, file_identifier, true);
+  }
+
   void SwapBufAllocator(FlatBufferBuilderImpl &other) {
     buf_.swap_allocator(other.buf_);
   }

@@ -684,6 +684,27 @@ class CppGenerator : public BaseGenerator {
       code_ += "}";
       code_ += "";
 
+      // Finish a buffer with a given root object:
+      code_ += "inline void Finish{{STRUCT_NAME}}BufferUnsafe(";
+      code_ += "    " + GetBuilder() + " &fbb,";
+      code_ += "    ::flatbuffers::Offset<{{CPP_NAME}}> root) {";
+      if (parser_.file_identifier_.length())
+        code_ += "  fbb.Finish(root, {{STRUCT_NAME}}Identifier());";
+      else
+        code_ += "  fbb.FinishUnsafe(root);";
+      code_ += "}";
+      code_ += "";
+
+      code_ += "inline void FinishSizePrefixed{{STRUCT_NAME}}BufferUnsafe(";
+      code_ += "    " + GetBuilder() + " &fbb,";
+      code_ += "    ::flatbuffers::Offset<{{CPP_NAME}}> root) {";
+      if (parser_.file_identifier_.length())
+        code_ += "  fbb.FinishSizePrefixed(root, {{STRUCT_NAME}}Identifier());";
+      else
+        code_ += "  fbb.FinishSizePrefixedUnsafe(root);";
+      code_ += "}";
+      code_ += "";
+
       if (opts_.generate_object_based_api) {
         // A convenient root unpack function.
         auto native_name = WrapNativeNameInNameSpace(struct_def, opts_);
