@@ -1470,13 +1470,13 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     // This will cause the whole buffer to be aligned.
     PreAlign(prefix_size + root_offset_size + file_id_size, minalign_);
 
-    if (file_identifier) {
+    if (file_identifier) [[unlikely]] {
       FLATBUFFERS_ASSERT(strlen(file_identifier) == kFileIdentifierLength);
       PushBytesUnsafe(reinterpret_cast<const uint8_t *>(file_identifier),
                 kFileIdentifierLength);
     }
     PushElementUnsafe(ReferTo(root));  // Location of root.
-    if (size_prefix) { PushElement(GetSize()); }
+    if (size_prefix) { PushElementUnsafe(GetSize()); }
     finished = true;
   }
 
