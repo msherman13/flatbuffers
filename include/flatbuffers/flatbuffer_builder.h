@@ -372,7 +372,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   }
 
   template<typename T> void AddElementUnsafe(voffset_t field, T e) {
-    TrackField(field, PushElementUnsafe(e));
+    TrackFieldUnsafe(field, PushElementUnsafe(e));
   }
 
   template<typename T> void AddOffset(voffset_t field, Offset<T> off) {
@@ -399,7 +399,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   template<typename T> void AddStructUnsafe(voffset_t field, const T* structptr) {
     AlignUnsafe(AlignOf<T>());
     buf_.push_small_unsafe(*structptr);
-    TrackField(field, CalculateOffset<uoffset_t>());
+    TrackFieldUnsafe(field, CalculateOffset<uoffset_t>());
   }
 
   void AddStructOffset(voffset_t field, uoffset_t off) {
@@ -551,7 +551,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     // We fill its value later.
     // This is relative to the end of the 32-bit region.
     const uoffset_t vtable_offset_loc =
-        static_cast<uoffset_t>(PushElement<soffset_t>(0));
+        static_cast<uoffset_t>(PushElementUnsafe<soffset_t>(0));
     // Write a vtable, which consists entirely of voffset_t elements.
     // It starts with the number of offsets, followed by a type id, followed
     // by the offsets themselves. In reverse:
