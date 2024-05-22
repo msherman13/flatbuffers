@@ -856,6 +856,22 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     return StartVector<OffsetT, LenT>(len, sizeof(T), AlignOf<T>());
   }
 
+  template<template<typename> class OffsetT = Offset, typename LenT = uint32_t>
+  void StartVectorUnsafe(size_t len, size_t elemsize, size_t alignment) {
+    NotNested();
+    nested = true;
+    // Align to the Length type of the vector (either 32-bit or 64-bit), so
+    // that the length of the buffer can be added without padding.
+    PreAlignUnsafe<LenT>(len * elemsize);
+    PreAlignUnsafe(len * elemsize, alignment);  // Just in case elemsize > uoffset_t.
+  }
+
+  template<typename T, template<typename> class OffsetT = Offset,
+           typename LenT = uint32_t>
+  void StartVectorUnsafe(size_t len) {
+    return StartVectorUnsafe<OffsetT, LenT>(len, sizeof(T), AlignOf<T>());
+  }
+
   // Call this right before StartVector/CreateVector if you want to force the
   // alignment to be something different than what the element size would
   // normally dictate.
@@ -922,8 +938,8 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     // If this assert hits, you're specifying a template argument that is
     // causing the wrong overload to be selected, remove it.
     AssertScalarT<T>();
-    StartVector<T, OffsetT, LenT>(len);
-    if (len > 0) {
+    StartVectorUnsafe<T, OffsetT, LenT>(len);
+    if (len > 0) [[likely]] {
       // clang-format off
       #if FLATBUFFERS_LITTLEENDIAN
         PushBytesUnsafe(reinterpret_cast<const uint8_t *>(v), len * sizeof(T));
