@@ -286,8 +286,12 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   /// @cond FLATBUFFERS_INTERNAL
   void Pad(size_t num_bytes) { buf_.fill(num_bytes); }
 
+  template <typename T> T FastMax(T a, T b) {
+    return a ^ ((a ^ b) & -(a < b));
+  }
+
   void TrackMinAlign(size_t elem_size) {
-    if (elem_size > minalign_) minalign_ = elem_size;
+    minalign_ = FastMax(minalign_, elem_size);
   }
 
   void Align(size_t elem_size) {
@@ -350,14 +354,14 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     FieldLoc fl = { off, field };
     buf_.scratch_push_small(fl);
     num_field_loc++;
-    if (field > max_voffset_) { max_voffset_ = field; }
+    max_voffset_ = FastMax(max_voffset_, field);
   }
 
   void TrackFieldUnsafe(voffset_t field, uoffset_t off) {
     FieldLoc fl = { off, field };
     buf_.scratch_push_small_unsafe(fl);
     num_field_loc++;
-    if (field > max_voffset_) { max_voffset_ = field; }
+    max_voffset_ = FastMax(max_voffset_, field);
   }
 
   // Like PushElement, but additionally tracks the field this represents.
@@ -649,7 +653,6 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   }
 
   void PreAlignUnsafe(size_t len, size_t alignment) {
-    if (len == 0) return;
     TrackMinAlign(alignment);
     buf_.fill_unsafe(PaddingBytes(GetSize() + len, alignment));
   }
