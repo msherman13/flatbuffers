@@ -295,6 +295,11 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     buf_.fill(PaddingBytes(buf_.size(), elem_size));
   }
 
+  void AlignUnsafe(size_t elem_size) {
+    TrackMinAlign(elem_size);
+    buf_.fill_unsafe(PaddingBytes(buf_.size(), elem_size));
+  }
+
   void PushFlatBuffer(const uint8_t *bytes, size_t size) {
     PushBytes(bytes, size);
     finished = true;
@@ -322,7 +327,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   template<typename T, typename ReturnT = uoffset_t>
   ReturnT PushElementUnsafe(T element) {
     AssertScalarT<T>();
-    Align(sizeof(T));
+    AlignUnsafe(sizeof(T));
     buf_.push_small_unsafe(EndianScalar(element));
     return CalculateOffset<ReturnT>();
   }
@@ -336,7 +341,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   template<typename T, template<typename> class OffsetT = Offset>
   uoffset_t PushElementUnsafe(OffsetT<T> off) {
     // Special case for offsets: see ReferTo below.
-    return PushElementUnsafe(ReferTo(off.o));
+    return PushElementUnsafe(ReferToUnsafe(off.o));
   }
 
   // When writing fields, we track where they are, so we can create correct
@@ -376,7 +381,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   }
 
   template<typename T> void AddOffsetUnsafe(voffset_t field, Offset<T> off) {
-    AddElementUnsafe(field, ReferTo(off.o));
+    AddElementUnsafe(field, ReferToUnsafe(off.o));
   }
 
   template<typename T> void AddOffset(voffset_t field, Offset64<T> off) {
@@ -392,7 +397,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
   }
 
   template<typename T> void AddStructUnsafe(voffset_t field, const T* structptr) {
-    Align(AlignOf<T>());
+    AlignUnsafe(AlignOf<T>());
     buf_.push_small_unsafe(*structptr);
     TrackField(field, CalculateOffset<uoffset_t>());
   }
@@ -418,6 +423,22 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     Align(sizeof(uoffset64_t));
     // 64-bit offsets are relative to tail of the whole buffer
     return ReferTo(off, GetSize());
+  }
+
+  uoffset_t ReferToUnsafe(uoffset_t off) {
+    // Align to ensure GetSizeRelative32BitRegion() below is correct.
+    AlignUnsafe(sizeof(uoffset_t));
+    // 32-bit offsets are relative to the tail of the 32-bit region of the
+    // buffer. For most cases (without 64-bit entities) this is equivalent to
+    // size of the whole buffer (e.g. GetSize())
+    return ReferTo(off, GetSizeRelative32BitRegion());
+  }
+
+  uoffset64_t ReferToUnsafe(uoffset64_t off) {
+    // Align to ensure GetSize() below is correct.
+    AlignUnsafe(sizeof(uoffset64_t));
+    // 64-bit offsets are relative to tail of the whole buffer
+    return ReferToUnsafe(off, GetSize());
   }
 
   template<typename T, typename T2> T ReferTo(const T off, const T2 size) {
@@ -627,11 +648,22 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     buf_.fill(PaddingBytes(GetSize() + len, alignment));
   }
 
+  void PreAlignUnsafe(size_t len, size_t alignment) {
+    if (len == 0) return;
+    TrackMinAlign(alignment);
+    buf_.fill_unsafe(PaddingBytes(GetSize() + len, alignment));
+  }
+
   // Aligns such than when "len" bytes are written, an object of type `AlignT`
   // can be written after it (forward in the buffer) without padding.
   template<typename AlignT> void PreAlign(size_t len) {
     AssertScalarT<AlignT>();
     PreAlign(len, AlignOf<AlignT>());
+  }
+
+  template<typename AlignT> void PreAlignUnsafe(size_t len) {
+    AssertScalarT<AlignT>();
+    PreAlignUnsafe(len, AlignOf<AlignT>());
   }
   /// @endcond
 
@@ -1468,14 +1500,14 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     const size_t file_id_size = file_identifier ? kFileIdentifierLength : 0;
 
     // This will cause the whole buffer to be aligned.
-    PreAlign(prefix_size + root_offset_size + file_id_size, minalign_);
+    PreAlignUnsafe(prefix_size + root_offset_size + file_id_size, minalign_);
 
     if (file_identifier) [[unlikely]] {
       FLATBUFFERS_ASSERT(strlen(file_identifier) == kFileIdentifierLength);
       PushBytesUnsafe(reinterpret_cast<const uint8_t *>(file_identifier),
                 kFileIdentifierLength);
     }
-    PushElementUnsafe(ReferTo(root));  // Location of root.
+    PushElementUnsafe(ReferToUnsafe(root));  // Location of root.
     if (size_prefix) { PushElementUnsafe(GetSize()); }
     finished = true;
   }
