@@ -987,7 +987,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
 
   template<typename T>
   Offset<Vector<Offset<T>>> CreateVectorUnsafe(const Offset<T> *v, size_t len) {
-    StartVector<Offset<T>>(len);
+    StartVectorUnsafe<Offset<T>>(len);
     for (auto i = len; i > 0;) { PushElementUnsafe(v[--i]); }
     return Offset<Vector<Offset<T>>>(EndVectorUnsafe(len));
   }
@@ -1127,7 +1127,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
     typedef typename VectorT<T>::size_type LenT;
     typedef typename OffsetT<VectorT<const T *>>::offset_type offset_type;
 
-    StartVector<OffsetT, LenT>(len * sizeof(T) / AlignOf<T>(), sizeof(T),
+    StartVectorUnsafe<OffsetT, LenT>(len * sizeof(T) / AlignOf<T>(), sizeof(T),
                                AlignOf<T>());
     if (len > 0) {
       PushBytesUnsafe(reinterpret_cast<const uint8_t *>(v), sizeof(T) * len);
@@ -1631,7 +1631,7 @@ template<bool Is64Aware = false> class FlatBufferBuilderImpl {
 
   void CreateStringImplUnsafe(const char *str, size_t len) {
     NotNested();
-    PreAlign<uoffset_t>(len + 1);  // Always 0-terminated.
+    PreAlignUnsafe<uoffset_t>(len + 1);  // Always 0-terminated.
     buf_.fill_unsafe(1);
     PushBytesUnsafe(reinterpret_cast<const uint8_t *>(str), len);
     PushElementUnsafe(static_cast<uoffset_t>(len));
